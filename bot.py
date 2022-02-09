@@ -5,8 +5,6 @@ import discord
 from discord.ext.commands import Bot
 from dotenv import load_dotenv
 
-import game
-
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
 GUILD = os.getenv('DISCORD_GUILD')
@@ -15,8 +13,6 @@ GUILD = os.getenv('DISCORD_GUILD')
 # intents.members = True
 
 bot = Bot(command_prefix = '!', )#intents=intents)
-
-instance = game.Game()
 
 # On CLI side
 @bot.event
@@ -33,10 +29,8 @@ async def on_ready():
 # !play
 @bot.command()
 async def play(ctx):
-    test = "Winner"
-    msg = "**Hello " + test + "! Welcome to the test monster killing game!**"
     # Say intro message
-    intro_Message = discord.Embed(title=msg,
+    intro_Message = discord.Embed(title="**Hello! Welcome to the test monster killing game!**",
                     description="Please select an action!")
     sentMessage = await ctx.send(embed=intro_Message)
 
@@ -58,5 +52,8 @@ async def play(ctx):
     
     # Extract emoji selection to keyword
     action = emojis_to_actions[emoji]
+
+    # Complete action
+    instance.doAction(action)
 
 bot.run(TOKEN)
