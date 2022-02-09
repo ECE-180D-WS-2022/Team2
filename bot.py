@@ -33,8 +33,9 @@ async def on_ready():
 # !play
 @bot.command()
 async def play(ctx):
+    test = "Winner"
     # Say intro message
-    intro_Message = discord.Embed(title="**Hello! Welcome to the test monster killing game!**",
+    intro_Message = discord.Embed(title="**Hello " + test + "! Welcome to the test monster killing game!**",
                     description="Please select an action!")
     sentMessage = await ctx.send(embed=intro_Message)
 
@@ -56,8 +57,5 @@ async def play(ctx):
     
     # Extract emoji selection to keyword
     action = emojis_to_actions[emoji]
-
-    # Complete action
-    instance.doAction(action)
 
 bot.run(TOKEN)
