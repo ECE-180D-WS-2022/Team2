@@ -52,15 +52,6 @@ async def on_ready():
         f'{guild.name}(id: {guild.id})'
     )
 
-# !play
-@bot.command()
-async def play(ctx):
-    instance = Game(ctx)
-    instance.start()
-
-bot.run(TOKEN)
-
-
 # Game Related Classes and Functions
 MAX_PLAYERS = 2
 MAX_MONSTERS = 5
@@ -165,29 +156,10 @@ class Game:
                     phrase, amount = discordAction(player, self.context)
             timelimit -= 1
 
+# !play
+@bot.command()
+async def play(ctx):
+    instance = Game(ctx)
+    instance.start()
 
-
-
-
-
-
-# class Unit:
-#     def __init__(self):
-#         #self.hp = 
-#         # Every unit will have hp and mana
-
-# class Player(Unit):
-#     def __init__(self):
-#         # type of player [Person, Remote]
-#         # 
-
-#     # action
-#         # attack
-#         # defend
-#         # heal
-
-# # Remote players will still be players
-# # The way the game receives data will be different
-
-# class Monster(Unit):
-#     def __init__(self):
+bot.run(TOKEN)
