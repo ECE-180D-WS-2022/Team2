@@ -34,8 +34,9 @@ async def on_ready():
 @bot.command()
 async def play(ctx):
     test = "Winner"
+    msg = "**Hello " + test + "! Welcome to the test monster killing game!**"
     # Say intro message
-    intro_Message = discord.Embed(title="**Hello " + test + "! Welcome to the test monster killing game!**",
+    intro_Message = discord.Embed(title=msg,
                     description="Please select an action!")
     sentMessage = await ctx.send(embed=intro_Message)
 
