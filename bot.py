@@ -16,6 +16,8 @@ GUILD = os.getenv('DISCORD_GUILD')
 
 bot = Bot(command_prefix = '!', )#intents=intents)
 
+instance = game.Game()
+
 # On CLI side
 @bot.event
 async def on_ready():
@@ -27,7 +29,6 @@ async def on_ready():
         f'{bot.user} is connected to the following guild:\n'
         f'{guild.name}(id: {guild.id})'
     )
-    print(discord.__version__)
 
 # !play
 @bot.command()
@@ -37,26 +38,26 @@ async def play(ctx):
                     description="Please select an action!")
     sentMessage = await ctx.send(embed=intro_Message)
 
-    emojis = {
+    emojis_to_actions = {
         "⚔": "attack",
         "🛡": "defend",
         "💖": "heal"
     }
 
     # Display possible actions as emojis
-    for k in emojis.keys():
+    for k in emojis_to_actions.keys():
         await sentMessage.add_reaction(k)
 
     # Wait for selection
     reaction, user = await bot.wait_for('reaction_add')
-    print(reaction)
+
+    # Unpack reaction to be used into dictionary
+    emoji = str(reaction)
     
     # Extract emoji selection to keyword
-    action = emojis[reaction]
+    action = emojis_to_actions[emoji]
 
     # Complete action
-    #doAction(action)
-
-
+    instance.doAction(action)
 
 bot.run(TOKEN)
