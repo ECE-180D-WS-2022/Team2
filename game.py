@@ -10,9 +10,31 @@ GUILD = os.getenv('DISCORD_GUILD')
 
 # Discord Related Functions
 
-def discordAction(player):
+async def discordAction(ctx, player):
     msg = discord.Embed(title="**Hello " + player.name + "!**",
                         description="Please select an action!")
+
+    # Say intro message
+    sentMessage = await ctx.send(embed=msg)
+
+    emojis_to_actions = {
+        "⚔": "attack",
+        "🛡": "defend",
+        "💖": "heal"
+    }
+
+    # Display possible actions as emojis
+    for k in emojis_to_actions.keys():
+        await sentMessage.add_reaction(k)
+
+    # Wait for selection
+    reaction, user = await bot.wait_for('reaction_add')
+
+    # Unpack reaction to be used into dictionary
+    emoji = str(reaction)
+    
+    # Extract emoji selection to keyword
+    action = emojis_to_actions[emoji]
 
 # Bot commands
 
@@ -33,29 +55,8 @@ async def on_ready():
 # !play
 @bot.command()
 async def play(ctx):
-    # Say intro message
-    intro_Message = discord.Embed(title="**Hello! Welcome to the test monster killing game!**",
-                    description="Please select an action!")
-    sentMessage = await ctx.send(embed=intro_Message)
-
-    emojis_to_actions = {
-        "⚔": "attack",
-        "🛡": "defend",
-        "💖": "heal"
-    }
-
-    # Display possible actions as emojis
-    for k in emojis_to_actions.keys():
-        await sentMessage.add_reaction(k)
-
-    # Wait for selection
-    reaction, user = await bot.wait_for('reaction_add')
-
-    # Unpack reaction to be used into dictionary
-    emoji = str(reaction)
-    
-    # Extract emoji selection to keyword
-    action = emojis_to_actions[emoji]
+    instance = Game(ctx)
+    instance.start()
 
 bot.run(TOKEN)
 
@@ -132,10 +133,12 @@ class Player:
 
 
 class Game:
-    def __init__(self):
+    def __init__(self, ctx):
         self.players = []
         self.monsters = []
         self.turn = 0
+        self.context = ctx
+
     
     def take_turn(self):
         if self.num_players < 1:
@@ -159,7 +162,8 @@ class Game:
                         player.spawnMonster()
                     if player.getHP() <= 0:
                         break
-                    phrase, amount = discordAction(player)
+                    phrase, amount = discordAction(player, self.context)
+            timelimit -= 1
 
 
 
