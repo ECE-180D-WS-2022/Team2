@@ -124,11 +124,10 @@ class Player:
 
 
 class Game:
-    def __init__(self, ctx):
+    def __init__(self):
         self.players = []
         self.monsters = []
         self.turn = 0
-        self.context = ctx
 
     
     def take_turn(self):
@@ -138,7 +137,7 @@ class Game:
     def doAction(self, action="Oops!"):
         print(action)
 
-    def start(self):
+    async def start(self, ctx):
         timelimit = TIMELIMIT
 
         # For now, it's single player
@@ -153,13 +152,13 @@ class Game:
                         player.spawnMonster()
                     if player.getHP() <= 0:
                         break
-                    phrase, amount = discordAction(player, self.context)
+                    discordAction(ctx, player)
             timelimit -= 1
 
 # !play
 @bot.command()
 async def play(ctx):
-    instance = Game(ctx)
-    instance.start()
+    instance = Game()
+    instance.start(ctx)
 
 bot.run(TOKEN)
