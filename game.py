@@ -317,29 +317,29 @@ class Game:
                     player.doAction(response, amount, monsters[player])
             # Monsters do actions on odd turns
             else:
-                pass
+
+                dead = False
                 # For each player
                 i = 0
-                for player in self.players:
-                    for monster in monsters[player]:
+                while (i < len(self.players)) and (not dead):
+                    j = 0
+                    while (j < len(monsters[self.players[i]])):
+                        monster = monsters[self.players[i]][j]
                         if monster.getHP() <= 0:
                             player.gainPoints(1000)
-                            monsters[player].remove(monster)
-                            print("Here!")
-                            print(not monsters[player])
+                            monsters[self.players[i]].pop(j)
 
-                        if not monsters[player]:
+                        elif player.getHP() == 0:
+                            dead = True
                             break
-                    
-                        # For now, the response is always attack
-                        response = "attack"
-                        # For now, we'll say the amount is random
-                        amount = np.random.randint(1, 6)
 
-                        monster.doAction(response, amount, player, i)
-                        
-
-                    printMonsterStats(monster, i)
+                        else:
+                            # For now, the response is always attack
+                            response = "attack"
+                            # For now, we'll say the amount is random
+                            amount = np.random.randint(1, 6)
+                            monster.doAction(response, amount, player, j)
+                            j += 1
                     i += 1
             self.turn += 1
             print("")
