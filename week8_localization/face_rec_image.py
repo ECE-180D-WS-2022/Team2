@@ -3,7 +3,7 @@ import numpy as np
 #480 x 640 resolution 
 #ver x hor
 
-img_path = 'test_face.jpg'
+img_path = 'test.jpg'
 img = cv2.imread(img_path)
 if img is None:
     print("ERROR")
