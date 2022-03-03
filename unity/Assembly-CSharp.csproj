@@ -36,11 +36,9 @@
     <ImplicitlyExpandDesignTimeFacades>false</ImplicitlyExpandDesignTimeFacades>
   </PropertyGroup>
   <ItemGroup>
-     <Compile Include="Assets\Monster.cs" />
-     <Compile Include="Assets\IP_Player.cs" />
-     <Compile Include="Assets\GameLogic.cs" />
      <Compile Include="Assets\HUD.cs" />
      <Compile Include="Assets\Unit.cs" />
+     <Compile Include="Assets\GameLogic.cs" />
     <Reference Include="UnityEngine">
         <HintPath>C:\Program Files\Unity\Hub\Editor\2020.3.28f1\Editor\Data\Managed\UnityEngine\UnityEngine.dll</HintPath>
     </Reference>

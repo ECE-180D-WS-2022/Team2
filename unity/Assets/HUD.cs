@@ -6,18 +6,20 @@ using UnityEngine.UI;
 public class HUD : MonoBehaviour
 {
     public Text nameText;
-    public Text hpText;
+    public Text HPText;
     public Slider hpSlider;
 
-    public void SetHUD(Unit unit)
+    public void SetHUD(Unit unit) 
     {
         nameText.text = unit.unitName;
-        hpText.text = unit.currentHP.ToString();
+        HPText.text = "HP: " + unit.currentHP.ToString() + "/" + unit.maxHP.ToString();
         hpSlider.maxValue = unit.maxHP;
         hpSlider.value = unit.currentHP;
     }
 
-    public void SetHP(int hp) {
-        hpSlider.value = hp;
+    public void SetHP(Unit unit)
+    {
+        hpSlider.value = unit.currentHP;
+        HPText.text = "HP: " + unit.currentHP.ToString() + "/" + unit.maxHP.ToString();
     }
 }
