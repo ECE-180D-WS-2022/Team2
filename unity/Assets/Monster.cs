@@ -26,10 +26,12 @@ public class Monster : MonoBehaviour
     {
         currentHP -= dmg;
         
-        if (currentHP <= 0)
+        if (currentHP <= 0) {
+            currentHP = 0;
             return true;
-        else
+        } else {
             return false;
+        }
     }
 
     public void OnClick(BaseEventData data)
