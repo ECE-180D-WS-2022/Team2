@@ -34,7 +34,7 @@ client.subscribe('ECE180D/team2/commands')
 heallist=['heal','ideal','meal','deal','steel', 'wheel','feel', 'steal','heel','peel','zeal','kneel','teal','real','hill','pele','eel','you','kiel','recover','recorder']
 
 # for word "defend"
-dlist=['commend','defend','befriend','command','depend','fend','define','defer','defeat','the']
+dlist=['commend','defend','befriend','command','depend','fend','define','defer','defeat','the','offend']
 
 # set flag --> flag value will depend on unity
 flag = 0
