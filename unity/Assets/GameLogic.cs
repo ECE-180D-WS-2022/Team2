@@ -4,7 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using System.Linq;
 
-public enum GameState { START, WAITING, IP_PLAYER_TURN, MONSTER_TURN, WON, LOST }
+public enum GameState { START, WAITING, IP_PLAYER_TURN, R_PLAYER_TURN, MONSTER_TURN, WON, LOST }
 
 public class GameLogic : MonoBehaviour
 {
@@ -34,27 +34,27 @@ public class GameLogic : MonoBehaviour
 
     public mqttReceiver commandReceiver;
     public mqttReceiver positionReceiver;
+    public mqttReceiver remoteReceiver;
 
     int turns = 0;
 
     int standing_index = -1;
+    int chosen_index = -1;
 
     float timeForSpeech = 2f;
-    float maxTime = 10f;
+    float maxTime = 5f;
     float currentTime = 0f;
     bool runningTime;
-    bool skipped;
 
     // Start is called before the first frame update
     void Start()
     {
         commandReceiver.OnMessageArrived += OnMessageArrivedCommandHandler;
         positionReceiver.OnMessageArrived += OnMessageArrivedPositionHandler;
+        remoteReceiver.OnMessageArrived += OnMessageArrivedRemoteHandler;
 
         // Turn off timer
         runningTime = false;
-        // Initialize
-        skipped = false;
 
         state = GameState.START;
         StartCoroutine(SetupBattle());
@@ -70,8 +70,33 @@ public class GameLogic : MonoBehaviour
 
         if (currentTime >= maxTime) {
             runningTime = false;
-            skipped = true;
-            StartCoroutine(MonsterTurn());
+            TooSlow();
+        }
+    }
+
+    void TooSlow()
+    {
+        StartCoroutine(TooSlowMessage());
+    }
+
+    IEnumerator TooSlowMessage()
+    {
+        dialogueText.text = "You're too slow!";
+        if (state == GameState.R_PLAYER_TURN) {
+            remoteReceiver.messagePublish = "You're too slow";
+            remoteReceiver.Publish();
+        }
+
+        combatButtons.SetActive(false);
+        for (int i = 0; i < 3; i++) {
+            directions[i].SetActive(false);
+        }
+        yield return new WaitForSeconds(timeForSpeech);
+        if (state == GameState.IP_PLAYER_TURN) {
+            state = GameState.R_PLAYER_TURN;
+            R_PlayerTurn();
+        } else {
+            StartCoroutine(CheckEndGame());
         }
     }
 
@@ -111,8 +136,32 @@ public class GameLogic : MonoBehaviour
         IP_PlayerTurn();
     }
 
-    IEnumerator MonsterTurn()
+    void SendPrompt()
     {
+        remoteReceiver.messagePublish = "Please pick a monster to control: ";
+        remoteReceiver.Publish();
+
+        string messageToSend = "";
+        bool first = false;
+
+        for (int i = 0; i < 3; i++) {
+            if (takenMonsterPlatforms[i] == true) {
+                if (!first) {
+                    first = true;
+                    messageToSend += i.ToString();
+                } else {
+                    messageToSend += ", " + i.ToString();
+                }
+            }
+        }
+
+        remoteReceiver.messagePublish = messageToSend;
+        remoteReceiver.Publish();
+    }
+
+    void R_PlayerTurn()
+    {
+        runningTime = false;
         // Disable combat buttons
         combatButtons.SetActive(false);
         // Disable direction buttons
@@ -120,46 +169,52 @@ public class GameLogic : MonoBehaviour
             directions[i].SetActive(false);
         }
 
-        turnText.text = "Monster";
+        turnText.text = "R_Player";
 
-        if (skipped) {
-            skipped = false;
-            dialogueText.text = "You're too slow!";
-            yield return new WaitForSeconds(timeForSpeech);
-        }
+        dialogueText.text = "Waiting for remote player to choose...";
+
+        SendPrompt();
+
+        state = GameState.R_PLAYER_TURN;
+        runningTime = true;
+    }
+
+    IEnumerator MonsterTurn()
+    {
+        turnText.text = "Monster";
 
         bool isDead = false;
         int killer = -1;
 
-        for (int i = 0; i < 3; i++) {
-            if (takenMonsterPlatforms[i] == true) {
+        
+        if (chosen_index != -1) {
+            if (takenMonsterPlatforms[chosen_index] == true) {
                 state = GameState.MONSTER_TURN;
-                dialogueText.text = monsterUnit[i].unitName + " attacked!";
+                dialogueText.text = monsterUnit[chosen_index].unitName + " attacked!";
 
                 yield return new WaitForSeconds(timeForSpeech);
 
-                monsterUnit[i].damage = Random.Range(0, 250);
+                monsterUnit[chosen_index].damage = Random.Range(0, 250);
                 if (playerUnit.isDefending == true) {
                     playerUnit.isDefending = false;
-                    monsterUnit[i].damage /= 2;
+                    monsterUnit[chosen_index].damage /= 2;
                 }
 
-                dialogueText.text = monsterUnit[i].unitName + " dealt " + monsterUnit[i].damage + " HP!";
+                dialogueText.text = monsterUnit[chosen_index].unitName + " dealt " + monsterUnit[chosen_index].damage + " HP!";
 
                 yield return new WaitForSeconds(timeForSpeech);
 
-                isDead = playerUnit.TakeDamage(monsterUnit[i].damage);
+                isDead = playerUnit.TakeDamage(monsterUnit[chosen_index].damage);
 
-                Vector3 moveforward = new Vector3(0f, 0f, -100f);
+                Vector3 moveforward = new Vector3(0f, 0f, -25f);
 
-                monsterUnit[i].transform.position += moveforward;
-                monsterHUD[i].transform.position += moveforward;
+                monsterUnit[chosen_index].transform.position += moveforward;
+                monsterHUD[chosen_index].transform.position += moveforward;
 
                 playerHUD.SetHP(playerUnit);
 
                 if (isDead) {
-                    killer = i;
-                    break;
+                    killer = chosen_index;
                 }
             }
         }
@@ -172,47 +227,46 @@ public class GameLogic : MonoBehaviour
             state = GameState.LOST;
             EndBattle();
         } else {
-            turns += 1;
+            StartCoroutine(CheckEndGame());
+        }
+    }
 
-            bool keepGoing = true;
+    IEnumerator CheckEndGame()
+    {
+        turns += 1;
 
-            for (int i = 0; ((i < 3) && keepGoing); i++) {
-                if (takenMonsterPlatforms[i] == true) {
-                    float threshold = 0f;
-                    if (i == 0 || i == 2) 
-                        threshold = -200f;
-                    else
-                        threshold = -300f;
-                    if (monsterUnit[i].transform.position.z <= threshold) {
-                        keepGoing = false;
-                        dialogueText.text = monsterUnit[i].unitName + " has killed the player!";
-                        playerUnit.TakeDamage(playerUnit.currentHP);
-                        playerHUD.SetHP(playerUnit);
-                        yield return new WaitForSeconds(2f);
+        bool keepGoing = true;
 
-                        state = GameState.LOST;
-                        EndBattle();
-                    }
+        for (int i = 0; ((i < 3) && keepGoing); i++) {
+            if (takenMonsterPlatforms[i] == true) {
+                float threshold = -300f;
+                if (monsterUnit[i].transform.position.z <= threshold) {
+                    keepGoing = false;
+                    dialogueText.text = monsterUnit[i].unitName + " has killed the player!";
+                    playerUnit.TakeDamage(playerUnit.currentHP);
+                    playerHUD.SetHP(playerUnit);
+                    yield return new WaitForSeconds(2f);
+
+                    state = GameState.LOST;
+                    EndBattle();
                 }
             }
+        }
 
-            if (keepGoing) {
-                if (turns % 2 == 0) {
-                    dialogueText.text = "A monster has spawned!";
+        if (keepGoing) {
+            if (turns % 2 == 0) {
+                SpawnMonster();
+                yield return new WaitForSeconds(timeForSpeech);
+            }
 
-                    SpawnMonster();
-                    yield return new WaitForSeconds(timeForSpeech);
-                }
-
-                timeForSpeech -= 0.125f;
-                maxTime -= 0.5f;
-                if (timeForSpeech < 1.0f) {
-                    state = GameState.WON;
-                    EndBattle();
-                } else {
-                    state = GameState.WAITING;
-                    IP_PlayerTurn();
-                }
+            timeForSpeech -= 0.125f;
+            maxTime -= 0.5f;
+            if (timeForSpeech < 1.0f) {
+                state = GameState.WON;
+                EndBattle();
+            } else {
+                state = GameState.IP_PLAYER_TURN;
+                IP_PlayerTurn();
             }
         }
     }
@@ -223,18 +277,30 @@ public class GameLogic : MonoBehaviour
         {
             turnText.text = "WON";
             dialogueText.text = "You won with " + playerUnit.points.ToString() + " points!";
+        
+            remoteReceiver.messagePublish = "IP Player has won!";
+            remoteReceiver.Publish();
+            remoteReceiver.messagePublish = "You've lost!";
+            remoteReceiver.Publish();
+        
         } else if (state == GameState.LOST) {
             turnText.text = "LOST";
             dialogueText.text = "You died with " + playerUnit.points.ToString() + " points!";
+        
+            remoteReceiver.messagePublish = "IP player has lost!";
+            remoteReceiver.Publish();
+            remoteReceiver.messagePublish = "You've won!";
+            remoteReceiver.Publish();
         }
     }
 
     void IP_PlayerTurn()
     {
-        state = GameState.WAITING;
-
+        runningTime = false;
         turnText.text = "IP_Player";
         dialogueText.text = "Choose an action:";
+
+        playerUnit.isDefending = false;
 
         // Enable combat buttons
         combatButtons.SetActive(true);
@@ -298,11 +364,13 @@ public class GameLogic : MonoBehaviour
         for (int i = 0; i < 3; i++) {
             directions[i].SetActive(false);
         }
+
+        // Switch states so player cannot do additional moves in between
+        state = GameState.WAITING;
         
         if (standing_index != -1 && (takenMonsterPlatforms[standing_index] == true)) {
-            state = GameState.MONSTER_TURN;
 
-            playerUnit.damage = Random.Range(0, 500);
+            playerUnit.damage = Random.Range(300, 500);
 
             dialogueText.text = "You're attacking " + monsterUnit[standing_index].unitName + "!";
 
@@ -315,8 +383,6 @@ public class GameLogic : MonoBehaviour
             bool isDead = monsterUnit[index].TakeDamage(playerUnit.damage);
 
             monsterHUD[index].SetHP(monsterUnit[index]);
-
-            state = GameState.MONSTER_TURN;
 
             yield return new WaitForSeconds(timeForSpeech);
 
@@ -343,7 +409,6 @@ public class GameLogic : MonoBehaviour
                 }
 
                 if (allFalse) {
-                    dialogueText.text = "A monster has spawned!";
                     SpawnMonster();
 
                     yield return new WaitForSeconds(timeForSpeech);
@@ -352,7 +417,9 @@ public class GameLogic : MonoBehaviour
                 state = GameState.IP_PLAYER_TURN;
                 IP_PlayerTurn();
             } else {
-                StartCoroutine(MonsterTurn());
+                //StartCoroutine(MonsterTurn());
+                state = GameState.R_PLAYER_TURN;
+                R_PlayerTurn();
             }
         } else {
             dialogueText.text = "You're standing on the wrong spot!";
@@ -361,8 +428,9 @@ public class GameLogic : MonoBehaviour
 
             dialogueText.text = "You've lost your turn!";
 
-            state = GameState.MONSTER_TURN;
-            StartCoroutine(MonsterTurn());
+            //StartCoroutine(MonsterTurn());
+            state = GameState.R_PLAYER_TURN;
+            R_PlayerTurn();
         }
 
         
@@ -376,10 +444,12 @@ public class GameLogic : MonoBehaviour
         dialogueText.text = "IP_Player defended!";
         playerUnit.isDefending = true;
 
-        state = GameState.MONSTER_TURN;
+        state = GameState.WAITING;  
 
         yield return new WaitForSeconds(timeForSpeech);
-        StartCoroutine(MonsterTurn());
+
+        state = GameState.R_PLAYER_TURN;
+        R_PlayerTurn();
     }
 
     IEnumerator IP_PlayerHeal()
@@ -387,17 +457,18 @@ public class GameLogic : MonoBehaviour
         // Disable combat buttons
         combatButtons.SetActive(false);
 
-        int healAmount = Random.Range(0, 500);
+        int healAmount = Random.Range(300, 500);
 
         playerUnit.Heal(healAmount);
         playerHUD.SetHP(playerUnit);
         dialogueText.text = "IP_Player healed " + healAmount + " HP!";
 
-        state = GameState.MONSTER_TURN;
+        state = GameState.WAITING;
 
         yield return new WaitForSeconds(timeForSpeech);
 
-        StartCoroutine(MonsterTurn());
+        state = GameState.R_PLAYER_TURN;
+        R_PlayerTurn();
     }
 
     public void OnAttackButton() 
@@ -405,6 +476,7 @@ public class GameLogic : MonoBehaviour
         if (state != GameState.IP_PLAYER_TURN)
             return;
         
+        runningTime = false;
         StartCoroutine(IP_PlayerAttack_Choose());
     }
 
@@ -413,6 +485,7 @@ public class GameLogic : MonoBehaviour
         if (state != GameState.IP_PLAYER_TURN)
             return;
         
+        runningTime = false;
         StartCoroutine(IP_PlayerDefend());
     }
 
@@ -421,6 +494,7 @@ public class GameLogic : MonoBehaviour
         if (state != GameState.IP_PLAYER_TURN)
             return;
         
+        runningTime = false;
         StartCoroutine(IP_PlayerHeal());
     }
 
@@ -432,6 +506,7 @@ public class GameLogic : MonoBehaviour
         // If an index is available, add it to the list
         for (int i = 0; i < 3; i++) {
             if (takenMonsterPlatforms[i] == false) {
+
                 indices.Add(i);
             }
         }
@@ -451,8 +526,10 @@ public class GameLogic : MonoBehaviour
         // Then, take the spot and spawn a monster
         int randomIndex = -1;
         if (indices.Any()) {
+            dialogueText.text = "A monster has spawned!";
+
             // Pick random index from LIST
-            randomIndex = Random.Range(0, indices.Count() - 1);
+            randomIndex = Random.Range(0, indices.Count());
             // Actual index to use
             int i_to_use = indices[randomIndex];
 
@@ -478,6 +555,8 @@ public class GameLogic : MonoBehaviour
 
             // Set up hp bar
             monsterHUD[i_to_use].SetHUD(monsterUnit[i_to_use]);
+        } else {
+            dialogueText.text = "No space for monster!";
         }
     }
 
@@ -490,23 +569,19 @@ public class GameLogic : MonoBehaviour
 
     private void OnMessageArrivedCommandHandler(string newMsg)
     {
-        Debug.Log("Command Event Fired. The message is = " + newMsg);
-        Debug.Log("Gamestate is: " + state);
+        //Debug.Log("Command Event Fired. The message is = " + newMsg);
+        //Debug.Log("Gamestate is: " + state);
         runningTime = false;
-        if (state == GameState.WAITING) {
-            if(newMsg=="attack")
+        if (state == GameState.IP_PLAYER_TURN) {
+            if (newMsg=="attack")
             {
-                Debug.Log("attack");
-                state = GameState.IP_PLAYER_TURN;
                 StartCoroutine(IP_PlayerAttack(standing_index));
             }
-            else if(newMsg=="heal")
+            else if (newMsg=="heal")
             {
-                state = GameState.IP_PLAYER_TURN;
                 StartCoroutine(IP_PlayerHeal());
-            } else if(newMsg=="defend")
+            } else if (newMsg=="defend")
             {
-                state = GameState.IP_PLAYER_TURN;
                 StartCoroutine(IP_PlayerDefend());
             }
         }
@@ -514,7 +589,7 @@ public class GameLogic : MonoBehaviour
 
     private void OnMessageArrivedPositionHandler(string newMsg)
     {
-        Debug.Log("Position Event Fired. The message is = " + newMsg);
+        //Debug.Log("Position Event Fired. The message is = " + newMsg);
         if (newMsg == "L") {
             standing_index = 0;
         } else if (newMsg == "R") {
@@ -526,4 +601,38 @@ public class GameLogic : MonoBehaviour
         }
         
     } 
+
+    private void OnMessageArrivedRemoteHandler(string newMsg)
+    {
+        if (state == GameState.R_PLAYER_TURN) {
+            if (newMsg=="0")
+            {
+                runningTime = false;
+                chosen_index = int.Parse(newMsg);
+                Debug.Log("Chosen_index is: " + chosen_index.ToString());
+                state = GameState.MONSTER_TURN;
+                StartCoroutine(MonsterTurn());
+            }
+            else if (newMsg=="1")
+            {
+                runningTime = false;
+                chosen_index = int.Parse(newMsg);
+                Debug.Log("Chosen_index is: " + chosen_index.ToString());
+                state = GameState.MONSTER_TURN;
+                StartCoroutine(MonsterTurn());
+            } else if (newMsg=="2")
+            {
+                runningTime = false;
+                chosen_index = int.Parse(newMsg);
+                Debug.Log("Chosen_index is: " + chosen_index.ToString());
+                state = GameState.MONSTER_TURN;
+                StartCoroutine(MonsterTurn());
+            } else {
+                remoteReceiver.messagePublish = "You've sent an invalid response! Try again...";
+                remoteReceiver.Publish();
+
+                SendPrompt();
+            }
+        }
+    }
 }
